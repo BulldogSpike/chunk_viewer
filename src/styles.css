@@ -108,15 +108,24 @@ input {
 .layer-control {
   position: absolute;
   top: 50%;
-  left: 23px;
+  left: 72px;
   z-index: 4;
-  display: grid;
-  justify-items: center;
-  gap: 12px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
   transform: translateY(-50%);
 }
 
+.layer-slider-slot {
+  position: relative;
+  width: 34px;
+  height: 210px;
+}
+
 .layer-control input[type="range"] {
+  position: absolute;
+  top: 88px;
+  left: -78px;
   width: 190px;
   height: 34px;
   accent-color: #ff1642;
@@ -137,7 +146,7 @@ input {
 }
 
 .layer-value {
-  min-width: 54px;
+  min-width: 58px;
   padding: 5px 7px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
@@ -287,7 +296,8 @@ input {
   }
 
   .layer-control {
-    left: 8px;
+    left: 48px;
+    gap: 10px;
   }
 
   .mini-map {

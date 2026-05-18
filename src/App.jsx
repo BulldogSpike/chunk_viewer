@@ -226,14 +226,16 @@ export default function App() {
 
       {chunk && (
         <div className="layer-control">
-          <input
-            type="range"
-            min={chunk.minY}
-            max={chunk.maxY}
-            value={layerMax}
-            onChange={(event) => setLayerMax(Number(event.target.value))}
-            aria-label="visible layer"
-          />
+          <div className="layer-slider-slot">
+            <input
+              type="range"
+              min={chunk.minY}
+              max={chunk.maxY}
+              value={layerMax}
+              onChange={(event) => setLayerMax(Number(event.target.value))}
+              aria-label="visible layer"
+            />
+          </div>
           <div className="layer-value">Y {layerMax}</div>
         </div>
       )}
