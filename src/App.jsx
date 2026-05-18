@@ -1,12 +1,11 @@
 import React, {useCallback, useMemo, useState} from 'react';
 import DeckGL from '@deck.gl/react';
 import {COORDINATE_SYSTEM, LightingEffect, AmbientLight, DirectionalLight, OrbitView} from '@deck.gl/core';
-import {SimpleMeshLayer} from '@deck.gl/mesh-layers';
-import {CubeGeometry} from '@luma.gl/engine';
 import {Info, Map, Upload} from 'lucide-react';
+import ChunkMeshLayer from './ChunkMeshLayer.js';
+import {buildChunkMesh} from './chunkMesh.js';
 import {parseChunk, readRegionFile} from './mcaParser.js';
 
-const cube = new CubeGeometry();
 const SAMPLE_REGION = '/samples/r.0.0.mca';
 
 const lightingEffect = new LightingEffect({
@@ -142,12 +141,12 @@ export default function App() {
     [loadChunk, region]
   );
 
-  const renderedBlocks = useMemo(() => {
+  const chunkMesh = useMemo(() => {
     if (!chunk) {
-      return [];
+      return null;
     }
 
-    return buildRenderableSurface(chunk.blocks, layerMax);
+    return buildChunkMesh(chunk.blocks, layerMax);
   }, [chunk, layerMax]);
 
   const layers = useMemo(() => {
@@ -156,32 +155,23 @@ export default function App() {
     }
 
     return [
-      new SimpleMeshLayer({
-        id: 'minecraft-voxel-layer',
-        data: renderedBlocks,
-        mesh: cube,
+      new ChunkMeshLayer({
+        id: 'minecraft-chunk-mesh-layer',
+        mesh: chunkMesh,
         coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
-        getPosition: (block) => [block.x - 7.5, block.z - 7.5, block.y],
-        getColor: (block) => block.color,
-        getScale: [1, 1, 1],
         material: {
           ambient: 0.55,
           diffuse: 0.65,
           shininess: 16,
           specularColor: [20, 20, 20]
         },
-        pickable: true,
         opacity: 1,
         parameters: {
           depthTest: true
-        },
-        updateTriggers: {
-          getPosition: [chunk.index],
-          getColor: [chunk.index]
         }
       })
     ];
-  }, [chunk, renderedBlocks]);
+  }, [chunk, chunkMesh]);
 
   return (
     <main className="app-shell">
@@ -192,9 +182,6 @@ export default function App() {
         onViewStateChange={({viewState: nextViewState}) => setViewState(nextViewState)}
         layers={layers}
         effects={[lightingEffect]}
-        getTooltip={({object}) =>
-          object ? `${object.name.replace('minecraft:', '')}  x:${object.x} y:${object.y} z:${object.z}` : null
-        }
       />
 
       <section className="top-bar" aria-label="controls">
@@ -247,7 +234,11 @@ export default function App() {
         </div>
         <div>
           <span>Blocks Rendered</span>
-          <strong>{renderedBlocks.length}</strong>
+          <strong>{chunkMesh?.blockCount ?? 0}</strong>
+        </div>
+        <div>
+          <span>Faces Rendered</span>
+          <strong>{chunkMesh?.faceCount ?? 0}</strong>
         </div>
       </aside>
 
@@ -267,32 +258,6 @@ export default function App() {
       {error && <div className="error-banner">{error}</div>}
     </main>
   );
-}
-
-function buildRenderableSurface(blocks, layerMax) {
-  const clipped = blocks.filter((block) => block.y <= layerMax);
-  const occupied = new Set(clipped.map(blockKey));
-  const visible = [];
-
-  for (const block of clipped) {
-    const hasOpenFace =
-      !occupied.has(`${block.x + 1},${block.y},${block.z}`) ||
-      !occupied.has(`${block.x - 1},${block.y},${block.z}`) ||
-      !occupied.has(`${block.x},${block.y + 1},${block.z}`) ||
-      !occupied.has(`${block.x},${block.y - 1},${block.z}`) ||
-      !occupied.has(`${block.x},${block.y},${block.z + 1}`) ||
-      !occupied.has(`${block.x},${block.y},${block.z - 1}`);
-
-    if (hasOpenFace) {
-      visible.push(block);
-    }
-  }
-
-  return visible;
-}
-
-function blockKey(block) {
-  return `${block.x},${block.y},${block.z}`;
 }
 
 function MiniMap({chunks, selectedIndex}) {
