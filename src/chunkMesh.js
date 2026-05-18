@@ -77,6 +77,7 @@ export function buildChunkMesh(blocks, layerMax) {
   const positions = [];
   const normals = [];
   const texCoords = [];
+  const visibleBlocks = [];
   let faceCount = 0;
   let visibleBlockCount = 0;
 
@@ -97,6 +98,7 @@ export function buildChunkMesh(blocks, layerMax) {
 
     if (hasFace) {
       visibleBlockCount += 1;
+      visibleBlocks.push(block);
     }
   }
 
@@ -106,7 +108,8 @@ export function buildChunkMesh(blocks, layerMax) {
     texCoords: new Float32Array(texCoords),
     vertexCount: positions.length / 3,
     blockCount: visibleBlockCount,
-    faceCount
+    faceCount,
+    visibleBlocks
   };
 }
 

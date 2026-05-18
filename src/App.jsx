@@ -1,11 +1,14 @@
 import React, {useCallback, useMemo, useState} from 'react';
 import DeckGL from '@deck.gl/react';
 import {COORDINATE_SYSTEM, LightingEffect, AmbientLight, DirectionalLight, OrbitView} from '@deck.gl/core';
+import {SimpleMeshLayer} from '@deck.gl/mesh-layers';
+import {CubeGeometry} from '@luma.gl/engine';
 import {Info, Map, Upload} from 'lucide-react';
 import ChunkMeshLayer from './ChunkMeshLayer.js';
 import {buildChunkMesh} from './chunkMesh.js';
 import {parseChunk, readRegionFile} from './mcaParser.js';
 
+const pickingCube = new CubeGeometry();
 const SAMPLE_REGION = '/samples/r.0.0.mca';
 
 const lightingEffect = new LightingEffect({
@@ -40,29 +43,45 @@ export default function App() {
   const [error, setError] = useState('');
   const [viewState, setViewState] = useState(INITIAL_VIEW_STATE);
 
-  const loadChunk = useCallback((nextRegion, entry) => {
-    setStatus('Чтение чанка');
-    setError('');
+  const applyParsedChunk = useCallback((nextRegion, entry, parsed) => {
+    const yMid = parsed.minY + (parsed.maxY - parsed.minY) / 2;
 
-    try {
-      const parsed = parseChunk(nextRegion, entry);
-      const yMid = parsed.minY + (parsed.maxY - parsed.minY) / 2;
+    setChunk(parsed);
+    setLayerMax(parsed.maxY);
+    setSelectedIndex(entry.index);
+    setViewState((current) => ({
+      ...current,
+      target: [0, 0, yMid],
+      zoom: Math.max(2.8, current.zoom)
+    }));
+    setStatus(`${nextRegion.fileName}`);
 
-      setChunk(parsed);
-      setLayerMax(parsed.maxY);
-      setSelectedIndex(entry.index);
-      setViewState((current) => ({
-        ...current,
-        target: [0, 0, yMid],
-        zoom: Math.max(2.8, current.zoom)
-      }));
-      setStatus(`${nextRegion.fileName}`);
-    } catch (chunkError) {
-      setChunk(null);
-      setError(chunkError.message);
-      setStatus('Ошибка чтения');
+    if (parsed.blocks.length) {
+      setError('');
+    } else {
+      setError(
+        `Чанк ${entry.x}, ${entry.z} пока не содержит блоков` +
+          `${parsed.status ? ` (status: ${parsed.status})` : ''}. Выберите другой чанк в этом region.`
+      );
     }
   }, []);
+
+  const loadChunk = useCallback(
+    (nextRegion, entry) => {
+      setStatus('Чтение чанка');
+      setError('');
+
+      try {
+        const parsed = parseChunk(nextRegion, entry);
+        applyParsedChunk(nextRegion, entry, parsed);
+      } catch (chunkError) {
+        setChunk(null);
+        setError(chunkError.message);
+        setStatus('Ошибка чтения');
+      }
+    },
+    [applyParsedChunk]
+  );
 
   const loadRegionBuffer = useCallback(
     (buffer, fileName) => {
@@ -75,9 +94,15 @@ export default function App() {
         return;
       }
 
-      loadChunk(nextRegion, nextRegion.chunks[0]);
+      const firstRenderableChunk = findFirstRenderableChunk(nextRegion);
+
+      if (firstRenderableChunk) {
+        applyParsedChunk(nextRegion, firstRenderableChunk.entry, firstRenderableChunk.parsed);
+      } else {
+        loadChunk(nextRegion, nextRegion.chunks[0]);
+      }
     },
-    [loadChunk]
+    [applyParsedChunk, loadChunk]
   );
 
   const handleFileChange = useCallback(
@@ -169,6 +194,25 @@ export default function App() {
         parameters: {
           depthTest: true
         }
+      }),
+      new SimpleMeshLayer({
+        id: 'minecraft-block-picking-layer',
+        data: chunkMesh?.visibleBlocks ?? [],
+        mesh: pickingCube,
+        coordinateSystem: COORDINATE_SYSTEM.CARTESIAN,
+        getPosition: (block) => [block.x - 7.5, block.z - 7.5, block.y + 0.5],
+        getScale: [0.5, 0.5, 0.5],
+        getColor: [0, 0, 0, 0],
+        pickable: true,
+        opacity: 1,
+        parameters: {
+          depthTest: true
+        },
+        updateTriggers: {
+          getPosition: [chunk.index],
+          getScale: [chunk.index],
+          getColor: [chunk.index]
+        }
       })
     ];
   }, [chunk, chunkMesh]);
@@ -182,6 +226,7 @@ export default function App() {
         onViewStateChange={({viewState: nextViewState}) => setViewState(nextViewState)}
         layers={layers}
         effects={[lightingEffect]}
+        getTooltip={(info) => (info.object ? getBlockTooltip(info) : null)}
       />
 
       <section className="top-bar" aria-label="controls">
@@ -242,12 +287,6 @@ export default function App() {
         </div>
       </aside>
 
-      <button className="info-button" type="button" title={chunk?.status ?? 'Chunk viewer'}>
-        <Info size={18} />
-      </button>
-
-      <MiniMap chunks={region?.chunks ?? []} selectedIndex={selectedIndex} />
-
       {!chunk && (
         <div className="empty-state">
           <div className="empty-mark">16</div>
@@ -260,19 +299,62 @@ export default function App() {
   );
 }
 
-function MiniMap({chunks, selectedIndex}) {
-  const selected = chunks.find((chunk) => chunk.index === selectedIndex);
-  const loadedIndexes = useMemo(() => new Set(chunks.map((chunk) => chunk.index)), [chunks]);
+function getBlockTooltip({object, x, y}) {
+  const blockName = escapeHtml(object.name.replace('minecraft:', '').replaceAll('_', ' '));
 
-  return (
-    <div className="mini-map" aria-label="region minimap">
-      <div className="mini-grid">
-        {Array.from({length: 1024}, (_, index) => {
-          const exists = loadedIndexes.has(index);
-          const isSelected = selected?.index === index;
-          return <span key={index} className={`${exists ? 'loaded' : ''} ${isSelected ? 'selected' : ''}`} />;
-        })}
+  return {
+    className: 'deck-tooltip block-tooltip',
+    html: `
+      <div class="block-tooltip__name">${blockName}</div>
+      <div class="block-tooltip__coords">
+        <span>x ${object.x}</span>
+        <span>y ${object.y}</span>
+        <span>z ${object.z}</span>
       </div>
-    </div>
-  );
+    `,
+    style: {
+      transform: `translate(${x + 16}px, ${Math.max(12, y - 44)}px)`
+    }
+  };
+}
+
+function findFirstRenderableChunk(region) {
+  let fallback = null;
+
+  for (const entry of region.chunks) {
+    try {
+      const parsed = parseChunk(region, entry);
+
+      if (!fallback) {
+        fallback = {entry, parsed};
+      }
+
+      if (parsed.blocks.length > 0) {
+        return {entry, parsed};
+      }
+    } catch {
+      // Keep scanning: one corrupt/proto chunk should not prevent opening the region.
+    }
+  }
+
+  return fallback;
+}
+
+function escapeHtml(value) {
+  return value.replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      case "'":
+        return '&#039;';
+      default:
+        return char;
+    }
+  });
 }
