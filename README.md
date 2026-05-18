@@ -1,18 +1,82 @@
 # Minecraft Chunk Viewer
 
-React + DeckGL viewer for Minecraft Anvil region files (`.mca`).
+Визуализатор чанков Minecraft Java Edition для region-файлов Anvil (`.mca`).
 
-## Run
+Проект сделан на React и DeckGL: React отвечает за интерфейс загрузки,
+выбор чанка и слайдер высоты, DeckGL/luma рендерят 3D-сцену.
+
+## Запуск
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open the local Vite URL and load an `.mca` file from a Minecraft `region`
-directory. The viewer parses chunk NBT in the browser, renders the selected
-chunk as instanced DeckGL cubes, and uses the left vertical slider to clip the
-visible Y layer.
+После запуска открой локальный Vite URL, обычно:
 
-The project includes one test region from a current Minecraft world:
-`public/samples/r.0.0.mca`.
+```text
+http://localhost:5173/
+```
+
+## Что умеет
+
+- Загружает `.mca` файлы прямо в браузере.
+- Читает Minecraft Anvil region header, сжатые chunk payload и NBT.
+- Поддерживает gzip, zlib и raw chunk compression.
+- Показывает список чанков из region-файла.
+- Автоматически выбирает первый чанк, где есть блоки.
+- Позволяет выбрать другой чанк вручную.
+- Вращает сцену мышью через DeckGL `OrbitView`.
+- Приближает и отдаляет сцену колесом мыши.
+- Левый вертикальный слайдер обрезает видимый диапазон по Y.
+- Показывает количество загруженных чанков, видимых блоков и граней.
+- Показывает tooltip блока при наведении: имя блока и координаты `x/y/z`.
+
+## Рендер
+
+Чанк рендерится не отдельными кубами, а одним custom DeckGL layer:
+
+- строится merged mesh только из видимых граней;
+- невидимые внутренние грани не попадают в геометрию;
+- для граней используется процедурный UV-атлас;
+- базовые блоки визуально различаются: stone, deepslate, dirt, grass, sand,
+  gravel, ores, water, lava, leaves, logs, planks и другие группы.
+
+Для tooltip используется отдельный прозрачный picking layer. Он не влияет на
+картинку, но позволяет DeckGL определять блок под курсором.
+
+## Тестовый файл
+
+В проект добавлен sample region из моего тестого Minecraft-мира:
+
+```text
+public/samples/r.0.0.mca
+```
+
+В интерфейсе есть кнопка `sample`, которая загружает этот файл без ручного
+выбора через file picker.
+
+## Пустые чанки
+
+В новых мирах Minecraft часть чанков в `.mca` может существовать в region-файле,
+но ещё не содержать блоков. Например status может быть `minecraft:structure_starts`
+или другим промежуточным этапом генерации.
+
+Viewer такие чанки не считает ошибкой:
+
+- при загрузке region он пытается открыть первый непустой чанк;
+- если выбрать пустой чанк вручную, появится сообщение, что блоков в нём пока нет.
+
+## Поддержка версий
+
+Разработано под Minecraft Java Edition 1.13+ с palette/block states.
+Также есть базовая поддержка старых Anvil-чанков с numeric block IDs.
+
+Ограничения:
+
+- Bedrock Edition не поддерживается.
+- LZ4 chunk compression пока не поддержан.
+- Это не настоящие текстуры, а кастомный процедурный пиксельный атлас.
+- Ресурс паки, освещение, entity и многое другое пока не реализованы. Упс. 
+
+Ерин Д. Д., ВР-24 заочное
