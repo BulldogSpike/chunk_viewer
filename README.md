@@ -12,7 +12,7 @@ npm install
 npm run dev
 ```
 
-После запуска открой локальный Vite URL, обычно:
+После запуска необходимо открыть локальный Vite URL, обычно:
 
 ```text
 http://localhost:5173/
@@ -47,7 +47,7 @@ http://localhost:5173/
 
 ## Тестовый файл
 
-В проект добавлен sample region из моего тестого Minecraft-мира:
+В проект добавлен sample region из моего тестового Minecraft-мира:
 
 ```text
 public/samples/r.0.0.mca
